@@ -33,6 +33,7 @@ function initialFranchises(): Franchise[] {
 
 export interface MockState {
   loggedInUser: User | null;
+  users: Record<string, User>;
   franchises: Franchise[];
   orders: Order[];
 }
@@ -40,8 +41,9 @@ export interface MockState {
 // Mocks every pizza service and pizza factory endpoint the frontend calls. The state is
 // mutable so that creates, closes, and orders are reflected in later requests.
 export async function mockService(page: Page): Promise<MockState> {
-  const validUsers: Record<string, User> = { ...users };
-  const state: MockState = { loggedInUser: null, franchises: initialFranchises(), orders: [] };
+  const state: MockState = { loggedInUser: null, users: structuredClone(users), franchises: initialFranchises(), orders: [] };
+  const validUsers = state.users;
+  let nextUserId = 9;
 
   await page.route('*/**/api/auth', async (route) => {
     const method = route.request().method();
@@ -53,7 +55,7 @@ export async function mockService(page: Page): Promise<MockState> {
 
     const req = route.request().postDataJSON();
     if (method === 'POST') {
-      const user: User = { id: '9', name: req.name, email: req.email, password: req.password, roles: [{ role: Role.Diner }] };
+      const user: User = { id: String(nextUserId++), name: req.name, email: req.email, password: req.password, roles: [{ role: Role.Diner }] };
       validUsers[req.email] = user;
       state.loggedInUser = user;
       await route.fulfill({ json: { user, token: 'registered' } });
@@ -73,6 +75,47 @@ export async function mockService(page: Page): Promise<MockState> {
   await page.route('*/**/api/user/me', async (route) => {
     expect(route.request().method()).toBe('GET');
     await route.fulfill({ json: state.loggedInUser });
+  });
+
+  // GET /api/user?page=&limit=&name=, PUT /api/user/:userId, DELETE /api/user/:userId
+  await page.route(/\/api\/user(\/\d+)?(\?.*)?$/, async (route) => {
+    const request = route.request();
+    const method = request.method();
+    const url = new URL(request.url());
+    const userId = url.pathname.split('/')[3];
+
+    if (method === 'GET') {
+      expect(userId).toBeUndefined();
+      const pageNum = Number(url.searchParams.get('page') ?? 0);
+      const limit = Number(url.searchParams.get('limit') ?? 10);
+      const filter = (url.searchParams.get('name') ?? '*').replace(/\*/g, '').toLowerCase();
+      const matched = Object.values(validUsers)
+        .filter((u) => u.name!.toLowerCase().includes(filter))
+        .sort((a, b) => Number(a.id) - Number(b.id))
+        .map(({ password, ...u }) => u);
+      const pageUsers = matched.slice(pageNum * limit, (pageNum + 1) * limit);
+      await route.fulfill({ json: { users: pageUsers, more: matched.length > (pageNum + 1) * limit } });
+      return;
+    }
+
+    const [email, existing] = Object.entries(validUsers).find(([, u]) => u.id === userId)!;
+
+    if (method === 'DELETE') {
+      delete validUsers[email];
+      await route.fulfill({ json: { message: 'user deleted' } });
+      return;
+    }
+
+    expect(method).toBe('PUT');
+    const req = request.postDataJSON();
+    const updated: User = { ...existing, name: req.name || existing.name, email: req.email || existing.email, password: req.password || existing.password };
+    delete validUsers[email];
+    validUsers[updated.email!] = updated;
+    if (state.loggedInUser?.id === updated.id) {
+      state.loggedInUser = updated;
+    }
+    const { password, ...user } = updated;
+    await route.fulfill({ json: { user, token: 'updated' } });
   });
 
   await page.route('*/**/api/order/menu', async (route) => {
