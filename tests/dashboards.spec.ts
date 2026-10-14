@@ -96,23 +96,23 @@ test('admin manages franchises', async ({ page }) => {
   await page.getByRole('link', { name: 'Admin' }).click();
 
   await expect(page.getByText("Mama Ricci's kitchen")).toBeVisible();
-  await expect(page.getByRole('table')).toContainText('LotaPizza');
-  await expect(page.getByRole('table')).toContainText('Fran Chise');
-  await expect(page.getByRole('table')).toContainText('Spanish Fork');
+  await expect(page.getByRole('table').first()).toContainText('LotaPizza');
+  await expect(page.getByRole('table').first()).toContainText('Fran Chise');
+  await expect(page.getByRole('table').first()).toContainText('Spanish Fork');
 
   // Paging: 4 franchises at 3 per page
-  await expect(page.getByRole('table')).not.toContainText('PizzaPocket');
+  await expect(page.getByRole('table').first()).not.toContainText('PizzaPocket');
   await page.getByRole('button', { name: '»' }).click();
-  await expect(page.getByRole('table')).toContainText('PizzaPocket');
-  await expect(page.getByRole('table')).not.toContainText('LotaPizza');
+  await expect(page.getByRole('table').first()).toContainText('PizzaPocket');
+  await expect(page.getByRole('table').first()).not.toContainText('LotaPizza');
   await page.getByRole('button', { name: '«' }).click();
-  await expect(page.getByRole('table')).toContainText('LotaPizza');
+  await expect(page.getByRole('table').first()).toContainText('LotaPizza');
 
   // Filtering
   await page.getByPlaceholder('Filter franchises').fill('corp');
   await page.getByRole('button', { name: 'Submit' }).click();
-  await expect(page.getByRole('table')).toContainText('PizzaCorp');
-  await expect(page.getByRole('table')).not.toContainText('LotaPizza');
+  await expect(page.getByRole('table').first()).toContainText('PizzaCorp');
+  await expect(page.getByRole('table').first()).not.toContainText('LotaPizza');
 
   // Create a franchise
   await page.getByRole('button', { name: 'Add Franchise' }).click();
@@ -140,6 +140,6 @@ test('admin manages franchises', async ({ page }) => {
   await page.getByRole('row', { name: 'LotaPizza' }).getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText('Sorry to see you go')).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByRole('table')).not.toContainText('LotaPizza');
+  await expect(page.getByRole('table').first()).not.toContainText('LotaPizza');
   expect(state.franchises.find((f) => f.name === 'LotaPizza')).toBeUndefined();
 });
