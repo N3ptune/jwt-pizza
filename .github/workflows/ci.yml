@@ -82,3 +82,29 @@ jobs:
           echo Deploying $version
           aws s3 cp dist s3://${{ secrets.APP_BUCKET }} --recursive
           aws cloudfront create-invalidation --distribution-id ${{ secrets.DISTRIBUTION_ID }} --paths "/*"
+
+  release:
+    name: Release
+    needs:
+      - build
+      - deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create tags and releases
+    env:
+      version: ${{needs.build.outputs.version}}
+    steps:
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: version-${{ env.version }}
+          name: Version ${{ env.version }}
+          commit: ${{ github.sha }}
+          makeLatest: true
+          allowUpdates: true
+          body: |
+            ## 🚀 Changes
+
+            ${{ github.event.head_commit.message }}
+
+            **commit**: ${{ github.sha }}
